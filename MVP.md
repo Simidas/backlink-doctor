@@ -80,7 +80,8 @@
 - Cloudflare Queues（任务队列）
 - Cloudflare Workers（后端部署）
 - Python + Playwright（爬虫，跑在独立服务器/VPS，通过 Queues 推送结果）
-- OpenAI GPT-4o API
+- **DeepSeek-V3 API**（丢链诊断）
+- **OpenAI GPT-4o-mini API**（邮件生成）
 - DataForSEO API
 - Stripe
 - Resend（邮件发送）
@@ -166,7 +167,7 @@ events (id, user_id, event_name, properties, created_at)  -- 埋点
 | 成本项 | MVP 用量 | 月成本 | 优化手段 |
 |--------|---------|--------|---------|
 | DataForSEO API | 10 域名 × 5000 外链 = 5万 查询 | **$75** | 用 `Backlinks` 端点批量查询，非实时按需调用；缓存 7 天 |
-| OpenAI GPT-4o | 5000 诊断 + 2000 邮件 = 7000 次 | **$70** | 诊断用 GPT-4o-mini（$0.60/1M tokens），邮件用 GPT-4o；prompt 压缩 |
+| OpenAI GPT-4o | 5000 诊断 + 2000 邮件 = 7000 次 | **$35** | 诊断用 **DeepSeek-V3**（$0.14/1M tokens），邮件用 GPT-4o-mini；prompt 压缩 |
 | 住宅代理 | 免费工具快照 500 次/月 | **$0** | MVP 不主动爬目标站，DataForSEO 已含状态码；Playwright 仅用于免费工具演示 |
 | Cloudflare Workers | 100万 请求/天 | **$0** | 免费额度：10万 请求/天，MVP 初期够用 |
 | Cloudflare D1 | 500万 读/写/天 | **$0** | 免费额度：25万 读/写/天，超了再升级 |
@@ -174,10 +175,10 @@ events (id, user_id, event_name, properties, created_at)  -- 埋点
 | Cloudflare Queues | 10万 消息/月 | **$0** | 免费额度：25万 消息/月 |
 | VPS（爬虫） | 1 核 1G Hetzner | **$5** | Hetzner CX11 德国区，$4.51/月 |
 | Resend | 1000 封邮件/月 | **$0** | 免费额度：3000 封/天 |
-| **总计** | | **~$150/月** | |
+| **总计** | | **~$115/月** | |
 
 **收入假设**：50 付费用户 × $29 = $1,450/月  
-**MVP 毛利率**：**~90%**
+**MVP 毛利率**：**~92%**
 
 ### 8.2 成本优化策略详解
 
@@ -186,11 +187,14 @@ events (id, user_id, event_name, properties, created_at)  -- 埋点
 - 本地缓存 7 天，不重复查询同一域名
 - MVP 只监控 10 个域名（免费用户 + 早期付费），非 1000 用户规模
 
-**2. OpenAI 从 $200 → $70**
-- **诊断用 GPT-4o-mini**：丢链原因分类是结构化任务，mini 足够（$0.60/1M input vs $5/1M）
-- **邮件用 GPT-4o**：需要质量，保留 4o（$5/1M input）
-- Prompt 压缩：去掉冗余 system prompt，用 JSON mode 减少 token
-- 预估：诊断 5000 次 × 0.5K tokens × $0.60/1M = $1.5；邮件 2000 次 × 2K tokens × $5/1M = $20；加上上下文和重试 ≈ $70
+**2. AI 模型从 $70 → $35**
+- **诊断用 DeepSeek-V3**：$0.14/1M tokens（输入），丢链原因分类是结构化任务，DeepSeek 足够
+  - 5000 诊断 × 1K tokens × $0.14/1M = $0.70
+  - 加上下文、重试、输出 ≈ $5
+- **邮件用 GPT-4o-mini**：$0.60/1M tokens（输入），自然语言生成质量够用
+  - 2000 邮件 × 2K tokens × $0.60/1M = $2.40
+  - 加 system prompt、重试 ≈ $10
+- **备用**：如果 DeepSeek 效果不达标，随时切回 GPT-4o-mini（成本 +$30）
 
 **3. 住宅代理从 $100 → $0**
 - MVP 监控引擎主要用 DataForSEO API，其返回已含外链状态（alive/lost）
@@ -210,10 +214,10 @@ events (id, user_id, event_name, properties, created_at)  -- 埋点
 
 | 阶段 | 付费用户 | 月成本 | 月收入 | 毛利率 |
 |------|---------|--------|--------|--------|
-| **MVP** | 50 | $150 | $1,450 | 90% |
-| **早期** | 200 | $280 | $5,800 | 95% |
-| **增长** | 500 | $520 | $14,500 | 96% |
-| **规模** | 1000 | $900 | $29,000 | 97% |
+| **MVP** | 50 | $115 | $1,450 | 92% |
+| **早期** | 200 | $220 | $5,800 | 96% |
+| **增长** | 500 | $420 | $14,500 | 97% |
+| **规模** | 1000 | $750 | $29,000 | 97% |
 
 **早期→增长阶段成本增长原因**：
 - DataForSEO：用户增长 → 域名/外链数增长
@@ -228,10 +232,10 @@ events (id, user_id, event_name, properties, created_at)  -- 埋点
 | 成本项 | 方案 | 月成本 |
 |--------|------|--------|
 | DataForSEO | 用免费额度/试用 + 手动导入 CSV | $0-30 |
-| OpenAI | 全用 GPT-4o-mini，包括邮件 | $20 |
+| AI | 全用 DeepSeek-V3（诊断+邮件） | $8 |
 | VPS | 用现有服务器（不新增） | $0 |
 | Cloudflare | 全免费档 | $0 |
-| **总计** | | **~$50** |
+| **总计** | | **~$38** |
 
 **代价**：邮件质量下降、无实时监控（靠手动触发）、用户体验打折。建议只在最早期验证阶段用，有付费用户后立即切回标准方案。
 
